@@ -1,8 +1,5 @@
 #!/bin/bash
 
-echo "Updating package lists..."
-sudo apt update && sudo apt upgrade -y
-
 echo "Installing required dependencies..."
 sudo apt install -y curl apt-transport-https ca-certificates gnupg software-properties-common jq git unzip
 
