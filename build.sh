@@ -86,27 +86,41 @@ INSTANCE_NAME="stress-test-instance"
 ZONE="us-central1-a"
 
 while true; do
-    CPU_USAGE=\$(top -bn1 | grep "Cpu(s)" | awk '{print \$2 + \$4}' | cut -d. -f1)
+    CPU_USAGE=$(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}' | cut -d. -f1)
 
-    echo "Current CPU Usage: \$CPU_USAGE%"
+    echo "Current CPU Usage: $CPU_USAGE%"
 
-    if [ "\$CPU_USAGE" -gt "\$THRESHOLD" ]; then
-        echo "CPU usage exceeded \$THRESHOLD%. Checking for cloud VM..."
+    if [ "$CPU_USAGE" -gt "$THRESHOLD" ]; then
+        echo "CPU usage exceeded $THRESHOLD%. Checking for cloud VM..."
         
-        INSTANCE_EXISTS=\$(gcloud compute instances list --filter="name=\${INSTANCE_NAME}" --format="value(name)")
+        INSTANCE_EXISTS=$(gcloud compute instances list --filter="name=${INSTANCE_NAME}" --format="value(name)")
 
-        if [ -z "\$INSTANCE_EXISTS" ]; then
+        if [ -z "$INSTANCE_EXISTS" ]; then
             echo "Creating cloud VM..."
-            gcloud compute instances create "\$INSTANCE_NAME" --zone="\$ZONE" --machine-type=e2-medium --image-family=debian-11 --image-project=debian-cloud --metadata=startup-script='sudo apt update && sudo apt install -y stress'
+            gcloud compute instances create "$INSTANCE_NAME" --zone="$ZONE" --machine-type=e2-medium --image-family=debian-11 --image-project=debian-cloud --metadata=startup-script='sudo apt update && sudo apt install -y stress'
         fi
 
-        echo "Migrating stress test to cloud..."
-        scp ~/cpu-monitor/stress_test.sh username@"\${INSTANCE_NAME}":/home/username/
-        ssh username@"\${INSTANCE_NAME}" "bash /home/username/stress_test.sh"
+        echo "Getting external IP of the cloud VM..."
+        EXTERNAL_IP=$(gcloud compute instances list --filter="name=${INSTANCE_NAME}" --format="value(EXTERNAL_IP)")
+
+        if [ -z "$EXTERNAL_IP" ]; then
+            echo "Failed to retrieve external IP. Exiting..."
+            exit 1
+        fi
+
+        echo "Migrating stress test to cloud ($EXTERNAL_IP)..."
+
+        # Ensure SSH key is set up for access
+        gcloud compute config-ssh
+
+        # Copy and execute stress test remotely
+        scp -o StrictHostKeyChecking=no ~/cpu-monitor/stress_test.sh "username@$EXTERNAL_IP:/home/username/"
+        ssh -o StrictHostKeyChecking=no "username@$EXTERNAL_IP" "bash /home/username/stress_test.sh"
     fi
 
     sleep 5
 done
+
 EOF
 chmod +x ~/cpu-monitor/monitor_cpu.sh
 
