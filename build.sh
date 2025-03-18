@@ -93,17 +93,17 @@ while true; do
     if [ "$CPU_USAGE" -gt "$THRESHOLD" ]; then
         echo "CPU usage exceeded $THRESHOLD%. Checking for cloud VM..."
         
-        INSTANCE_EXISTS=$(gcloud compute instances list --filter="name=${INSTANCE_NAME}" --format="value(name)")
+        INSTANCE_EXISTS=$(gcloud compute instances list --filter="name=$INSTANCE_NAME" --format="value(name)")
 
-        if [ -z "$INSTANCE_EXISTS" ]; then
+        if [[ -z "$INSTANCE_EXISTS" ]]; then
             echo "Creating cloud VM..."
             gcloud compute instances create "$INSTANCE_NAME" --zone="$ZONE" --machine-type=e2-medium --image-family=debian-11 --image-project=debian-cloud --metadata=startup-script='sudo apt update && sudo apt install -y stress'
         fi
 
         echo "Getting external IP of the cloud VM..."
-        EXTERNAL_IP=$(gcloud compute instances list --filter="name=${INSTANCE_NAME}" --format="value(EXTERNAL_IP)")
+        EXTERNAL_IP=$(gcloud compute instances describe "$INSTANCE_NAME" --zone="$ZONE" --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
 
-        if [ -z "$EXTERNAL_IP" ]; then
+        if [[ -z "$EXTERNAL_IP" ]]; then
             echo "Failed to retrieve external IP. Exiting..."
             exit 1
         fi
@@ -120,6 +120,7 @@ while true; do
 
     sleep 5
 done
+
 
 EOF
 chmod +x ~/cpu-monitor/monitor_cpu.sh
