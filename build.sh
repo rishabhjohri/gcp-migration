@@ -9,9 +9,9 @@ SCRIPT_DIR="$HOME/cpu-monitor"
 mkdir -p "$NODE_DIR"
 cd "$NODE_DIR"
 npm init -y
-npm install express socket.io
+npm install express socket.io chart.js
 
-# Creating server.js
+# Creating server.js with real-time CPU monitoring
 cat <<EOF > server.js
 const express = require('express');
 const { exec } = require('child_process');
@@ -35,6 +35,26 @@ app.get('/gcp-console', (req, res) => {
     res.redirect('https://console.cloud.google.com');
 });
 
+// Function to get CPU usage
+function getCpuUsage() {
+    return new Promise((resolve) => {
+        exec("top -bn1 | grep 'Cpu(s)' | awk '{print \$2 + \$4}'", (error, stdout, stderr) => {
+            if (error) {
+                console.error(\`Error fetching CPU usage: \${stderr}\`);
+                resolve(0);
+            } else {
+                resolve(parseFloat(stdout));
+            }
+        });
+    });
+}
+
+// Emit CPU utilization data every second
+setInterval(async () => {
+    const cpuUsage = await getCpuUsage();
+    io.emit('cpuData', cpuUsage);
+}, 1000);
+
 http.listen(3000, '0.0.0.0', () => {
     console.log('Server running on http://localhost:3000');
 });
@@ -42,22 +62,61 @@ EOF
 
 mkdir -p public
 
-# Creating index.html for frontend
+# Creating index.html with real-time CPU graph
 cat <<EOF > public/index.html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CPU Monitor</title>
+    <title>CPU Utilization Monitoring</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        canvas { max-width: 600px; margin: 20px auto; }
+        button { padding: 10px 20px; margin: 10px; cursor: pointer; }
+    </style>
 </head>
 <body>
     <h1>CPU Utilization Monitoring</h1>
+    <canvas id="cpuChart"></canvas>
     <button onclick="triggerStressTest()">Launch Computation</button>
     <button onclick="gotoGCP()">Go to Google Cloud Console</button>
 
     <script>
+        const ctx = document.getElementById('cpuChart').getContext('2d');
+        const cpuChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'CPU Utilization (%)',
+                    data: [],
+                    borderColor: 'blue',
+                    borderWidth: 2,
+                    fill: false
+                }]
+            },
+            options: {
+                scales: {
+                    y: { beginAtZero: true, max: 100 }
+                }
+            }
+        });
+
+        const socket = io();
+        socket.on('cpuData', (cpuUsage) => {
+            if (cpuChart.data.labels.length > 30) {
+                cpuChart.data.labels.shift();
+                cpuChart.data.datasets[0].data.shift();
+            }
+            const currentTime = new Date().toLocaleTimeString();
+            cpuChart.data.labels.push(currentTime);
+            cpuChart.data.datasets[0].data.push(cpuUsage);
+            cpuChart.update();
+        });
+
         function triggerStressTest() {
             fetch('/stress-test')
                 .then(response => response.text())
