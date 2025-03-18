@@ -1,7 +1,10 @@
 #!/bin/bash
 
+echo "Updating package lists..."
+sudo apt update && sudo apt upgrade -y
+
 echo "Installing required dependencies..."
-sudo apt install -y curl gnupg ca-certificates lsb-release apt-transport-https software-properties-common jq git unzip
+sudo apt install -y curl apt-transport-https ca-certificates gnupg software-properties-common jq git unzip
 
 # Install Node.js 20
 echo "Adding Node.js 20 repository..."
@@ -20,14 +23,16 @@ sudo apt install -y htop
 echo "Installing stress tool..."
 sudo apt install -y stress
 
-# Install Google Cloud SDK (Fixed Key Issue)
+# Install Google Cloud SDK
 echo "Adding Google Cloud SDK repository..."
-sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo tee /etc/apt/keyrings/cloud.google.gpg > /dev/null
-echo "deb [signed-by=/etc/apt/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
+
+echo "Importing Google Cloud public key..."
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo tee /usr/share/keyrings/cloud.google.gpg > /dev/null
+curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
 
 echo "Installing Google Cloud SDK..."
-sudo apt update && sudo apt install -y google-cloud-sdk
+sudo apt update && sudo apt install -y google-cloud-cli
 
 # Ensure gcloud is available in PATH
 export PATH=$PATH:/usr/lib/google-cloud-sdk/bin
@@ -38,9 +43,10 @@ source ~/.bashrc
 echo "Verifying gcloud installation..."
 gcloud --version
 
-# Install Google Cloud Compute Engine API components
-echo "Installing gcloud compute components..."
-gcloud components install beta compute
+# Authenticate and set up GCP
+echo "Authenticating with Google Cloud..."
+gcloud auth login
+gcloud config set project vcc-ass3
+gcloud config set compute/zone us-central1-a
 
 echo "Installation completed successfully!"
-echo "Ensure you have initialized gcloud with 'gcloud init' and configured the project."
